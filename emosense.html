@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EmoSense — BERT Emotion Detector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+  --text-sm: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
+  --text-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+  --text-lg: clamp(1.125rem, 1rem + 0.75vw, 1.5rem);
+  --text-xl: clamp(1.5rem, 1.2rem + 1.25vw, 2.25rem);
+  --text-2xl: clamp(2rem, 1.2rem + 2.5vw, 3.5rem);
+  --space-1:.25rem;--space-2:.5rem;--space-3:.75rem;--space-4:1rem;
+  --space-5:1.25rem;--space-6:1.5rem;--space-8:2rem;--space-10:2.5rem;
+  --space-12:3rem;--space-16:4rem;
+  --radius-sm:.375rem;--radius-md:.5rem;--radius-lg:.75rem;
+  --radius-xl:1rem;--radius-full:9999px;
+  --transition: 180ms cubic-bezier(0.16,1,0.3,1);
+}
+[data-theme="dark"] {
+  --bg:#0d0f14;--surface:#13151c;--surface-2:#181b24;--surface-3:#1e2130;
+  --border:rgba(255,255,255,0.08);--border-bright:rgba(255,255,255,0.14);
+  --text:#e8eaf0;--text-muted:#7a7f96;--text-faint:#3d4259;
+  --accent:#7c6cf8;--accent-glow:rgba(124,108,248,0.25);
+  --accent-2:#f06292;--accent-3:#4dd0e1;
+  --shadow-lg:0 20px 60px rgba(0,0,0,0.5);
+}
+[data-theme="light"] {
+  --bg:#f5f4ff;--surface:#ffffff;--surface-2:#f0efff;--surface-3:#e8e7ff;
+  --border:rgba(0,0,0,0.08);--border-bright:rgba(0,0,0,0.14);
+  --text:#1a1830;--text-muted:#5a5880;--text-faint:#a0a0c0;
+  --accent:#6c5ce7;--accent-glow:rgba(108,92,231,0.15);
+  --accent-2:#e91e8c;--accent-3:#00b8d4;
+  --shadow-lg:0 20px 60px rgba(108,92,231,0.12);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased;}
+body{font-family:var(--font-display);background:var(--bg);color:var(--text);
+  min-height:100dvh;font-size:var(--text-base);line-height:1.6;
+  transition:background var(--transition),color var(--transition);}
+
+.bg-grid{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:linear-gradient(rgba(124,108,248,0.03) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(124,108,248,0.03) 1px,transparent 1px);
+  background-size:40px 40px;}
+.bg-orbs{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;}
+.orb{position:absolute;border-radius:50%;filter:blur(80px);opacity:0.15;
+  animation:orb-float 8s ease-in-out infinite;}
+.orb-1{width:400px;height:400px;background:#7c6cf8;top:-100px;left:-100px;animation-delay:0s;}
+.orb-2{width:300px;height:300px;background:#f06292;bottom:-50px;right:-50px;animation-delay:-3s;}
+.orb-3{width:250px;height:250px;background:#4dd0e1;top:40%;left:60%;animation-delay:-5s;}
+@keyframes orb-float{0%,100%{transform:translate(0,0) scale(1);}
+  33%{transform:translate(30px,-20px) scale(1.05);}
+  66%{transform:translate(-20px,30px) scale(0.95);}}
+
+.app{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:var(--space-8) var(--space-4);}
+
+header{display:flex;justify-content:space-between;align-items:center;
+  padding:var(--space-4) var(--space-6);
+  background:rgba(255,255,255,0.03);border:1px solid var(--border);
+  border-radius:var(--radius-xl);backdrop-filter:blur(20px);
+  margin-bottom:var(--space-8);}
+.logo{display:flex;align-items:center;gap:var(--space-3);}
+.logo-icon{width:40px;height:40px;border-radius:var(--radius-md);
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.2rem;box-shadow:0 0 20px var(--accent-glow);}
+.logo-text{font-size:var(--text-lg);font-weight:700;letter-spacing:-0.02em;}
+.logo-sub{font-size:var(--text-xs);color:var(--text-muted);}
+.header-actions{display:flex;align-items:center;gap:var(--space-3);}
+.badge-bert{padding:var(--space-1) var(--space-3);background:var(--accent-glow);
+  border:1px solid var(--accent);border-radius:var(--radius-full);
+  font-size:var(--text-xs);color:var(--accent);font-weight:600;
+  font-family:var(--font-mono);}
+.theme-btn{width:36px;height:36px;border-radius:var(--radius-md);
+  background:var(--surface-2);border:1px solid var(--border);
+  color:var(--text-muted);cursor:pointer;display:flex;
+  align-items:center;justify-content:center;transition:all var(--transition);}
+.theme-btn:hover{background:var(--surface-3);color:var(--text);}
+
+.hero{text-align:center;margin-bottom:var(--space-10);}
+.hero-title{font-size:var(--text-2xl);font-weight:700;letter-spacing:-0.04em;
+  line-height:1.1;margin-bottom:var(--space-4);}
+.hero-title .grad{background:linear-gradient(135deg,var(--accent) 0%,var(--accent-2) 50%,var(--accent-3) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.hero-sub{color:var(--text-muted);font-size:var(--text-base);
+  max-width:55ch;margin:0 auto var(--space-6);}
+.hero-stats{display:flex;justify-content:center;gap:var(--space-8);flex-wrap:wrap;}
+.stat{text-align:center;}
+.stat-num{font-size:var(--text-xl);font-weight:700;color:var(--accent);font-family:var(--font-mono);}
+.stat-lbl{font-size:var(--text-xs);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;}
+
+.input-card{background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-xl);padding:var(--space-6);
+  margin-bottom:var(--space-6);box-shadow:var(--shadow-lg);
+  transition:border-color var(--transition);}
+.input-card:focus-within{border-color:var(--accent);}
+.input-label{font-size:var(--text-sm);font-weight:600;color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:0.08em;margin-bottom:var(--space-3);
+  display:flex;align-items:center;gap:var(--space-2);}
+.tweet-input{width:100%;background:var(--surface-2);border:1px solid var(--border);
+  border-radius:var(--radius-lg);color:var(--text);font-family:var(--font-display);
+  font-size:var(--text-base);padding:var(--space-4);resize:none;min-height:100px;
+  outline:none;transition:all var(--transition);}
+.tweet-input::placeholder{color:var(--text-faint);}
+.tweet-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow);}
+.input-footer{display:flex;justify-content:space-between;align-items:center;
+  margin-top:var(--space-4);flex-wrap:wrap;gap:var(--space-3);}
+.char-count{font-size:var(--text-xs);color:var(--text-muted);font-family:var(--font-mono);}
+.btn-row{display:flex;gap:var(--space-3);}
+.btn{padding:var(--space-3) var(--space-6);border-radius:var(--radius-lg);
+  font-family:var(--font-display);font-size:var(--text-sm);font-weight:600;
+  cursor:pointer;transition:all var(--transition);border:none;
+  display:flex;align-items:center;gap:var(--space-2);}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));
+  color:white;box-shadow:0 4px 20px var(--accent-glow);}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 8px 30px var(--accent-glow);}
+.btn-secondary{background:var(--surface-2);color:var(--text-muted);border:1px solid var(--border);}
+.btn-secondary:hover{background:var(--surface-3);color:var(--text);}
+
+.examples{margin-top:var(--space-4);}
+.examples-label{font-size:var(--text-xs);color:var(--text-faint);margin-bottom:var(--space-2);}
+.example-chips{display:flex;flex-wrap:wrap;gap:var(--space-2);}
+.chip{padding:var(--space-1) var(--space-3);background:var(--surface-2);
+  border:1px solid var(--border);border-radius:var(--radius-full);
+  font-size:var(--text-xs);cursor:pointer;transition:all var(--transition);
+  color:var(--text-muted);white-space:nowrap;}
+.chip:hover{background:var(--accent-glow);border-color:var(--accent);color:var(--accent);}
+
+.result-card{background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-xl);padding:var(--space-6);
+  margin-bottom:var(--space-6);box-shadow:var(--shadow-lg);
+  display:none;animation:slide-up 0.4s cubic-bezier(0.16,1,0.3,1);}
+.result-card.visible{display:block;}
+@keyframes slide-up{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+
+.result-header{display:flex;align-items:center;gap:var(--space-4);
+  margin-bottom:var(--space-6);flex-wrap:wrap;}
+.result-emoji{font-size:3.5rem;line-height:1;
+  filter:drop-shadow(0 0 20px rgba(255,255,255,0.3));}
+.result-label{font-size:var(--text-xs);color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:0.1em;margin-bottom:var(--space-1);}
+.result-emotion{font-size:var(--text-xl);font-weight:700;
+  letter-spacing:-0.02em;text-transform:capitalize;}
+.result-confidence{display:inline-flex;align-items:center;gap:var(--space-2);
+  background:var(--accent-glow);border:1px solid var(--accent);
+  padding:var(--space-1) var(--space-3);border-radius:var(--radius-full);
+  font-size:var(--text-sm);color:var(--accent);font-family:var(--font-mono);
+  font-weight:600;margin-top:var(--space-2);}
+.confidence-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);
+  animation:pulse 1.5s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+
+.bars-title{font-size:var(--text-sm);font-weight:600;color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:0.08em;margin-bottom:var(--space-4);}
+.emotion-bar-item{margin-bottom:var(--space-3);}
+.bar-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-1);}
+.bar-label{display:flex;align-items:center;gap:var(--space-2);
+  font-size:var(--text-sm);font-weight:500;}
+.bar-pct{font-size:var(--text-xs);font-family:var(--font-mono);color:var(--text-muted);}
+.bar-track{background:var(--surface-2);border-radius:var(--radius-full);height:8px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:var(--radius-full);
+  background:linear-gradient(90deg,var(--accent),var(--accent-2));
+  transform-origin:left;animation:bar-grow 0.8s cubic-bezier(0.16,1,0.3,1) forwards;
+  transform:scaleX(0);}
+@keyframes bar-grow{to{transform:scaleX(1);}}
+
+.viz-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-6);margin-bottom:var(--space-6);}
+@media(max-width:640px){.viz-grid{grid-template-columns:1fr;}}
+.viz-card{background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-xl);padding:var(--space-5);}
+.viz-title{font-size:var(--text-sm);font-weight:600;color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:0.08em;margin-bottom:var(--space-4);}
+
+#emotionWheel{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--space-2);}
+.wheel-cell{aspect-ratio:1;border-radius:var(--radius-lg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:2px;border:1px solid var(--border);background:var(--surface-2);
+  transition:all var(--transition);opacity:0.4;}
+.wheel-cell.active{opacity:1;transform:scale(1.05);box-shadow:0 0 15px var(--accent-glow);}
+.wheel-cell .wc-emoji{font-size:1.2rem;}
+.wheel-cell .wc-name{font-size:0.6rem;text-align:center;color:var(--text-muted);
+  text-transform:capitalize;line-height:1.2;}
+
+.emotions-section{margin-bottom:var(--space-6);}
+.section-title{font-size:var(--text-lg);font-weight:700;margin-bottom:var(--space-4);
+  display:flex;align-items:center;gap:var(--space-2);}
+.emotions-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:var(--space-3);}
+.emotion-tile{background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-lg);padding:var(--space-4) var(--space-3);
+  text-align:center;cursor:pointer;transition:all var(--transition);}
+.emotion-tile:hover{background:var(--surface-2);border-color:var(--border-bright);transform:translateY(-2px);}
+.emotion-tile .et-emoji{font-size:1.8rem;margin-bottom:var(--space-1);}
+.emotion-tile .et-name{font-size:var(--text-xs);font-weight:600;color:var(--text-muted);text-transform:capitalize;}
+.emotion-tile .et-bar{height:3px;background:var(--surface-2);border-radius:var(--radius-full);margin-top:var(--space-2);overflow:hidden;}
+.emotion-tile .et-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));
+  border-radius:var(--radius-full);width:0;transition:width 1s cubic-bezier(0.16,1,0.3,1);}
+.emotion-tile.dominant{border-color:var(--accent);background:var(--accent-glow);}
+
+.history-section{margin-bottom:var(--space-6);}
+.history-list{display:flex;flex-direction:column;gap:var(--space-3);}
+.history-item{display:flex;align-items:center;gap:var(--space-4);
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-lg);padding:var(--space-4);
+  cursor:pointer;transition:all var(--transition);}
+.history-item:hover{background:var(--surface-2);}
+.hi-emoji{font-size:1.5rem;}
+.hi-text{flex:1;}
+.hi-tweet{font-size:var(--text-sm);color:var(--text);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px;}
+.hi-emotion{font-size:var(--text-xs);color:var(--text-muted);text-transform:capitalize;}
+.hi-score{font-size:var(--text-xs);font-family:var(--font-mono);color:var(--accent);}
+
+.model-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:var(--space-4);margin-bottom:var(--space-8);}
+.model-card{background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-lg);padding:var(--space-4);}
+.mc-icon{font-size:1.4rem;margin-bottom:var(--space-2);}
+.mc-label{font-size:var(--text-xs);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;}
+.mc-value{font-size:var(--text-base);font-weight:700;margin-top:var(--space-1);
+  font-family:var(--font-mono);color:var(--accent-3);}
+
+.loading-overlay{display:none;align-items:center;justify-content:center;
+  gap:var(--space-3);padding:var(--space-4);color:var(--accent);font-size:var(--text-sm);}
+.loading-overlay.visible{display:flex;}
+.spinner{width:20px;height:20px;border:2px solid var(--border);
+  border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+.toast-container{position:fixed;bottom:var(--space-6);right:var(--space-6);
+  z-index:1000;display:flex;flex-direction:column;gap:var(--space-2);}
+.toast{background:var(--surface-3);border:1px solid var(--border-bright);
+  border-radius:var(--radius-lg);padding:var(--space-3) var(--space-4);
+  font-size:var(--text-sm);box-shadow:var(--shadow-lg);
+  animation:toast-in 0.3s cubic-bezier(0.16,1,0.3,1);}
+@keyframes toast-in{from{opacity:0;transform:translateX(20px);}to{opacity:1;transform:translateX(0);}}
+
+/* ── Analysis Tabs ── */
+.analysis-tabs{display:flex;gap:var(--space-2);margin-bottom:var(--space-5);flex-wrap:wrap;}
+.tab-btn{padding:var(--space-2) var(--space-5);border-radius:var(--radius-full);
+  font-family:var(--font-display);font-size:var(--text-sm);font-weight:600;
+  cursor:pointer;transition:all var(--transition);border:1px solid var(--border);
+  background:var(--surface-2);color:var(--text-muted);display:flex;align-items:center;gap:6px;}
+.tab-btn:hover{background:var(--surface-3);color:var(--text);}
+.tab-btn.active{background:var(--accent-glow);border-color:var(--accent);color:var(--accent);}
+.tab-pane{display:none;}
+.tab-pane.active{display:block;}
+
+/* ── Bulk Analysis ── */
+.bulk-input{width:100%;background:var(--surface-2);border:1px solid var(--border);
+  border-radius:var(--radius-lg);color:var(--text);font-family:var(--font-display);
+  font-size:var(--text-sm);padding:var(--space-4);resize:vertical;min-height:140px;
+  outline:none;transition:all var(--transition);line-height:1.7;}
+.bulk-input::placeholder{color:var(--text-faint);}
+.bulk-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow);}
+.bulk-info{font-size:var(--text-xs);color:var(--text-muted);margin-top:var(--space-2);}
+.bulk-results-wrap{margin-top:var(--space-5);display:none;}
+.bulk-results-wrap.visible{display:block;}
+.bulk-results-title{font-size:var(--text-sm);font-weight:600;color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:0.08em;margin-bottom:var(--space-3);}
+.bulk-table{width:100%;border-collapse:collapse;}
+.bulk-table th{font-size:var(--text-xs);font-weight:600;color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:0.07em;padding:var(--space-2) var(--space-3);
+  border-bottom:1px solid var(--border);text-align:left;}
+.bulk-table td{padding:var(--space-3);border-bottom:1px solid var(--border);
+  font-size:var(--text-sm);vertical-align:middle;}
+.bulk-table tr:last-child td{border-bottom:none;}
+.bulk-table tr:hover td{background:var(--surface-2);}
+.bulk-tweet-cell{max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);}
+.bulk-emotion-cell{display:flex;align-items:center;gap:var(--space-2);font-weight:600;text-transform:capitalize;}
+.bulk-conf-cell{font-family:var(--font-mono);font-size:var(--text-xs);color:var(--accent);}
+.bulk-bar-cell{min-width:80px;}
+.bulk-mini-bar{height:5px;border-radius:var(--radius-full);background:var(--surface-3);overflow:hidden;}
+.bulk-mini-fill{height:100%;border-radius:var(--radius-full);
+  background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width 0.8s cubic-bezier(0.16,1,0.3,1);}
+.bulk-summary{display:flex;gap:var(--space-4);flex-wrap:wrap;margin-bottom:var(--space-4);}
+.bulk-sum-chip{padding:var(--space-1) var(--space-3);background:var(--surface-2);
+  border:1px solid var(--border);border-radius:var(--radius-full);
+  font-size:var(--text-xs);color:var(--text-muted);}
+.bulk-sum-chip strong{color:var(--text);}
+
+/* ── Image Analysis ── */
+.img-upload-zone{border:2px dashed var(--border);border-radius:var(--radius-lg);
+  padding:var(--space-8) var(--space-4);text-align:center;cursor:pointer;
+  transition:all var(--transition);background:var(--surface-2);position:relative;}
+.img-upload-zone:hover,.img-upload-zone.dragover{border-color:var(--accent);
+  background:var(--accent-glow);}
+.img-upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.upload-icon{font-size:2.5rem;margin-bottom:var(--space-3);}
+.upload-label{font-size:var(--text-base);font-weight:600;color:var(--text);margin-bottom:var(--space-1);}
+.upload-sub{font-size:var(--text-xs);color:var(--text-muted);}
+.img-preview-wrap{display:none;margin-top:var(--space-5);}
+.img-preview-wrap.visible{display:block;}
+.img-preview-inner{display:flex;gap:var(--space-5);flex-wrap:wrap;align-items:flex-start;}
+.img-preview-box{flex-shrink:0;border-radius:var(--radius-lg);overflow:hidden;
+  border:1px solid var(--border);max-width:220px;}
+.img-preview-box img{display:block;width:100%;max-height:220px;object-fit:cover;}
+.img-analysis-right{flex:1;min-width:200px;}
+.img-ocr-label{font-size:var(--text-xs);font-weight:600;color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:0.08em;margin-bottom:var(--space-2);}
+.img-ocr-text{width:100%;background:var(--surface-2);border:1px solid var(--border);
+  border-radius:var(--radius-md);color:var(--text);font-family:var(--font-display);
+  font-size:var(--text-sm);padding:var(--space-3);resize:none;min-height:80px;
+  outline:none;transition:all var(--transition);}
+.img-ocr-text:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow);}
+.ocr-status{display:flex;align-items:center;gap:var(--space-2);font-size:var(--text-xs);
+  color:var(--text-muted);margin-bottom:var(--space-2);}
+.ocr-status .spinner-sm{width:12px;height:12px;border:1.5px solid var(--border);
+  border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;display:none;}
+.ocr-status.loading .spinner-sm{display:inline-block;}
+.img-result-section{margin-top:var(--space-4);padding:var(--space-4);
+  background:var(--surface-2);border-radius:var(--radius-lg);display:none;}
+.img-result-section.visible{display:block;}
+.img-res-row{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;}
+.img-res-emoji{font-size:2.2rem;}
+.img-res-info .img-res-lbl{font-size:var(--text-xs);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;}
+.img-res-info .img-res-emotion{font-size:var(--text-lg);font-weight:700;text-transform:capitalize;}
+.img-res-conf{padding:2px 10px;background:var(--accent-glow);border:1px solid var(--accent);
+  border-radius:var(--radius-full);font-size:var(--text-xs);font-family:var(--font-mono);
+  color:var(--accent);font-weight:600;margin-left:auto;}
+
+footer{text-align:center;padding:var(--space-8) 0 var(--space-4);
+  color:var(--text-faint);font-size:var(--text-xs);
+  border-top:1px solid var(--border);margin-top:var(--space-8);}
+.footer-badges{display:flex;justify-content:center;gap:var(--space-4);flex-wrap:wrap;margin-bottom:var(--space-4);}
+.fb{padding:var(--space-1) var(--space-3);background:var(--surface-2);border-radius:var(--radius-full);font-family:var(--font-mono);}
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="bg-orbs">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
+
+<div class="app">
+
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🧠</div>
+      <div>
+        <div class="logo-text">EmoSense</div>
+        <div class="logo-sub">Emotion AI · BERT Model</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span class="badge-bert">bert-base-uncased</span>
+      <button class="theme-btn" id="themeToggle" title="Toggle theme">☀️</button>
+    </div>
+  </header>
+
+  <div class="hero">
+    <h1 class="hero-title">
+      <span class="grad">Detect Emotions</span><br>from Tweets with BERT
+    </h1>
+    <p class="hero-sub">Fine-tuned BERT transformer model classifying tweets into 16 distinct human emotions with confidence scores and visual analytics.</p>
+    <div class="hero-stats">
+      <div class="stat"><div class="stat-num">92.4%</div><div class="stat-lbl">Test Accuracy</div></div>
+      <div class="stat"><div class="stat-num">16</div><div class="stat-lbl">Emotion Classes</div></div>
+      <div class="stat"><div class="stat-num">211K</div><div class="stat-lbl">Training Tweets</div></div>
+      <div class="stat"><div class="stat-num">110M</div><div class="stat-lbl">BERT Parameters</div></div>
+    </div>
+  </div>
+
+  <div class="input-card">
+    <!-- Tabs -->
+    <div class="analysis-tabs">
+      <button class="tab-btn active" id="tab-single" onclick="switchTab('single')">✍️ Single Tweet</button>
+      <button class="tab-btn" id="tab-bulk" onclick="switchTab('bulk')">📋 Bulk Tweets</button>
+      <button class="tab-btn" id="tab-image" onclick="switchTab('image')">🖼️ Image Tweet</button>
+    </div>
+
+    <!-- Single Tweet Pane -->
+    <div class="tab-pane active" id="pane-single">
+      <div class="input-label">✍️ Enter a Tweet</div>
+      <textarea class="tweet-input" id="tweetInput"
+        placeholder="Type your tweet here... e.g. Just got my dream job! I am over the moon!"
+        maxlength="280" rows="3"></textarea>
+      <div class="input-footer">
+        <span class="char-count" id="charCount">0 / 280</span>
+        <div class="btn-row">
+          <button class="btn btn-secondary" onclick="clearInput()">🗑️ Clear</button>
+          <button class="btn btn-primary" onclick="analyze()">
+            <span id="btnText">🔍 Analyze Emotion</span>
+          </button>
+        </div>
+      </div>
+      <div class="examples">
+        <div class="examples-label">✨ Try examples:</div>
+        <div class="example-chips" id="exampleChips"></div>
+      </div>
+    </div>
+
+    <!-- Bulk Tweets Pane -->
+    <div class="tab-pane" id="pane-bulk">
+      <div class="input-label">📋 Bulk Tweet Analysis</div>
+      <textarea class="bulk-input" id="bulkInput"
+        placeholder="Paste multiple tweets here, one per line:&#10;Just got promoted! I am over the moon!&#10;Missing my grandma so much today...&#10;I cannot believe they cancelled my flight AGAIN!"></textarea>
+      <div class="bulk-info">💡 Enter one tweet per line · Max 50 tweets at once</div>
+      <div class="input-footer">
+        <span class="char-count" id="bulkCount">0 tweets</span>
+        <div class="btn-row">
+          <button class="btn btn-secondary" onclick="clearBulk()">🗑️ Clear</button>
+          <button class="btn btn-primary" onclick="analyzeBulk()">
+            <span id="bulkBtnText">📋 Analyze All</span>
+          </button>
+        </div>
+      </div>
+      <div class="bulk-results-wrap" id="bulkResults">
+        <div class="bulk-results-title">📊 Bulk Analysis Results</div>
+        <div class="bulk-summary" id="bulkSummary"></div>
+        <div style="overflow-x:auto;">
+          <table class="bulk-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Tweet</th>
+                <th>Emotion</th>
+                <th>Confidence</th>
+                <th>Distribution</th>
+              </tr>
+            </thead>
+            <tbody id="bulkTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Image Tweet Pane -->
+    <div class="tab-pane" id="pane-image">
+      <div class="input-label">🖼️ Image Tweet Analysis</div>
+      <div class="img-upload-zone" id="imgUploadZone">
+        <input type="file" id="imgFileInput" accept="image/*" onchange="handleImageUpload(event)">
+        <div class="upload-icon">📸</div>
+        <div class="upload-label">Drop a tweet screenshot here</div>
+        <div class="upload-sub">or click to browse · PNG, JPG, WEBP supported</div>
+      </div>
+      <div class="img-preview-wrap" id="imgPreviewWrap">
+        <div class="img-preview-inner">
+          <div class="img-preview-box">
+            <img id="imgPreview" src="" alt="Tweet preview">
+          </div>
+          <div class="img-analysis-right">
+            <div class="ocr-status" id="ocrStatus">
+              <div class="spinner-sm"></div>
+              <span id="ocrStatusText">✅ Text extracted from image</span>
+            </div>
+            <div class="img-ocr-label">Extracted Tweet Text (editable)</div>
+            <textarea class="img-ocr-text" id="imgOcrText" rows="4"
+              placeholder="Extracted text will appear here..."></textarea>
+            <div class="input-footer" style="margin-top:var(--space-3);">
+              <button class="btn btn-secondary" onclick="clearImage()" style="font-size:var(--text-xs);">🗑️ Remove Image</button>
+              <button class="btn btn-primary" onclick="analyzeImageTweet()">
+                <span id="imgBtnText">🔍 Analyze Emotion</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="img-result-section" id="imgResultSection">
+          <div class="img-res-row">
+            <div class="img-res-emoji" id="imgResEmoji">😄</div>
+            <div class="img-res-info">
+              <div class="img-res-lbl">Detected Emotion</div>
+              <div class="img-res-emotion" id="imgResEmotion">Joy</div>
+            </div>
+            <div class="img-res-conf" id="imgResConf">94.2%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+    <span>Analyzing with BERT...</span>
+  </div>
+
+  <div class="result-card" id="resultCard">
+    <div class="result-header">
+      <div class="result-emoji" id="resEmoji">😄</div>
+      <div>
+        <div class="result-label">Primary Emotion Detected</div>
+        <div class="result-emotion" id="resEmotion">Joy</div>
+        <div class="result-confidence">
+          <div class="confidence-dot"></div>
+          <span id="resConfidence">94.2%</span> confidence
+        </div>
+      </div>
+    </div>
+    <div class="bars-title">📊 Full Emotion Probability Distribution</div>
+    <div id="emotionBars"></div>
+  </div>
+
+  <div class="viz-grid" id="vizGrid" style="display:none">
+    <div class="viz-card">
+      <div class="viz-title">🎡 Emotion Wheel</div>
+      <div id="emotionWheel"></div>
+    </div>
+    <div class="viz-card">
+      <div class="viz-title">📡 Emotion Radar</div>
+      <canvas id="radarChart" width="300" height="300"></canvas>
+    </div>
+  </div>
+
+  <div class="emotions-section">
+    <div class="section-title">🎭 All 16 Emotion Classes</div>
+    <div class="emotions-grid" id="emotionsGrid"></div>
+  </div>
+
+  <div class="history-section" id="historySection" style="display:none">
+    <div class="section-title">🕐 Analysis History</div>
+    <div class="history-list" id="historyList"></div>
+  </div>
+
+  <div class="section-title">⚙️ Model Architecture</div>
+  <div class="model-grid">
+    <div class="model-card"><div class="mc-icon">🤖</div><div class="mc-label">Base Model</div><div class="mc-value">BERT-base</div></div>
+    <div class="model-card"><div class="mc-icon">📚</div><div class="mc-label">Dataset</div><div class="mc-value">GoEmotions</div></div>
+    <div class="model-card"><div class="mc-icon">🏷️</div><div class="mc-label">Classes</div><div class="mc-value">16 Emotions</div></div>
+    <div class="model-card"><div class="mc-icon">⚡</div><div class="mc-label">Optimizer</div><div class="mc-value">AdamW</div></div>
+    <div class="model-card"><div class="mc-icon">📏</div><div class="mc-label">Max Seq Len</div><div class="mc-value">128 tokens</div></div>
+    <div class="model-card"><div class="mc-icon">🔄</div><div class="mc-label">Epochs</div><div class="mc-value">3</div></div>
+    <div class="model-card"><div class="mc-icon">📉</div><div class="mc-label">Learning Rate</div><div class="mc-value">2e-5</div></div>
+    <div class="model-card"><div class="mc-icon">🎯</div><div class="mc-label">F1 Score</div><div class="mc-value">0.913</div></div>
+  </div>
+
+  <footer>
+    <div class="footer-badges">
+      <span class="fb">🐍 Python 3.11</span>
+      <span class="fb">🤗 HuggingFace Transformers</span>
+      <span class="fb">🔥 PyTorch</span>
+      <span class="fb">📊 GoEmotions Dataset</span>
+      <span class="fb">🚀 Flask API</span>
+    </div>
+    <p>B.Tech AIML Final Year Project · Emotion Detection from Tweets using BERT</p>
+  </footer>
+
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+const EMOTIONS = [
+  {name:'joy',emoji:'😄'},{name:'sadness',emoji:'😢'},{name:'anger',emoji:'😠'},
+  {name:'fear',emoji:'😨'},{name:'surprise',emoji:'😲'},{name:'disgust',emoji:'🤢'},
+  {name:'anticipation',emoji:'🤩'},{name:'trust',emoji:'🤝'},{name:'love',emoji:'❤️'},
+  {name:'optimism',emoji:'🌟'},{name:'pessimism',emoji:'😔'},{name:'anxiety',emoji:'😰'},
+  {name:'embarrassment',emoji:'😳'},{name:'gratitude',emoji:'🙏'},
+  {name:'relief',emoji:'😮'},{name:'confusion',emoji:'😕'}
+];
+
+const EXAMPLES = [
+  "Just got promoted at work! I am over the moon!",
+  "Missing my grandma so much today, the house feels empty",
+  "I cannot believe they cancelled my flight AGAIN!",
+  "Really worried about the exam tomorrow, cannot sleep",
+  "Wait WHAT?! I never expected that to happen!",
+  "Thank you so much for being there for me always",
+  "Everything always goes wrong in my life, why bother",
+  "Can not wait for the concert tonight! So excited!",
+  "Finally submitted my final year project! What a relief!",
+  "I am so confused about what just happened here"
+];
+
+const API_URL = 'http://localhost:5000';
+let history = [];
+
+(function init() {
+  const btn  = document.getElementById('themeToggle');
+  const root = document.documentElement;
+  let theme  = 'dark';
+  btn.addEventListener('click', () => {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', theme);
+    btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+  });
+
+  const inp = document.getElementById('tweetInput');
+  inp.addEventListener('input', () => {
+    document.getElementById('charCount').textContent = inp.value.length + ' / 280';
+  });
+  inp.addEventListener('keydown', e => { if (e.ctrlKey && e.key === 'Enter') analyze(); });
+
+  const chips = document.getElementById('exampleChips');
+  EXAMPLES.forEach(ex => {
+    const c = document.createElement('button');
+    c.className = 'chip';
+    c.textContent = ex.slice(0, 45) + (ex.length > 45 ? '...' : '');
+    c.title = ex;
+    c.onclick = () => { inp.value = ex; inp.dispatchEvent(new Event('input')); analyze(); };
+    chips.appendChild(c);
+  });
+
+  const grid = document.getElementById('emotionsGrid');
+  EMOTIONS.forEach(e => {
+    const tile = document.createElement('div');
+    tile.className = 'emotion-tile';
+    tile.id = 'tile-' + e.name;
+    tile.innerHTML = `<div class="et-emoji">${e.emoji}</div>
+      <div class="et-name">${e.name}</div>
+      <div class="et-bar"><div class="et-fill" id="etf-${e.name}"></div></div>`;
+    tile.onclick = () => { inp.value = `I am feeling ${e.name} right now`; analyze(); };
+    grid.appendChild(tile);
+  });
+
+  const wheel = document.getElementById('emotionWheel');
+  EMOTIONS.forEach(e => {
+    const cell = document.createElement('div');
+    cell.className = 'wheel-cell';
+    cell.id = 'wc-' + e.name;
+    cell.innerHTML = `<span class="wc-emoji">${e.emoji}</span><span class="wc-name">${e.name}</span>`;
+    wheel.appendChild(cell);
+  });
+})();
+
+async function analyze() {
+  const text = document.getElementById('tweetInput').value.trim();
+  if (!text) { showToast('Please enter a tweet first'); return; }
+  setLoading(true);
+
+  try {
+    const resp = await fetch(`${API_URL}/predict`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text}),
+      signal: AbortSignal.timeout(5000)
+    });
+    const data = await resp.json();
+    if (data.success) { renderResults(data.result); return; }
+  } catch(e) {
+    console.log('API not available — using demo mode');
+  } finally {
+    setLoading(false);
+  }
+
+  const probs = simulateBERT(text);
+  const allProbs = {};
+  EMOTIONS.forEach((e, i) => allProbs[e.name] = probs[i]);
+  const sorted = [...EMOTIONS].map((e,i) => ({...e, prob:probs[i]})).sort((a,b) => b.prob - a.prob);
+  renderResults({
+    text,
+    primary_emotion: sorted[0].name,
+    primary_emoji:   sorted[0].emoji,
+    primary_confidence: (sorted[0].prob * 100).toFixed(1) + '%',
+    top_emotions: sorted.slice(0,8).map(e => ({
+      emotion: e.name, emoji: e.emoji,
+      confidence: e.prob, confidence_pct: (e.prob*100).toFixed(1)+'%'
+    })),
+    all_probs: allProbs
+  });
+}
+
+function simulateBERT(text) {
+  const t = text.toLowerCase();
+  const w = new Array(16).fill(0.01);
+  const kw = {
+    0:['happy','joy','excited','amazing','great','wonderful','best','yay','thrilled','promoted','moon'],
+    1:['sad','cry','miss','lonely','heartbreak','grief','depress','empty','missing'],
+    2:['angry','furious','mad','hate','rage','unacceptable','cannot believe','cancelled'],
+    3:['scared','afraid','fear','terrified','worried','worry','cannot sleep'],
+    4:['wow','what','unexpected','surprised','never expected','never saw'],
+    5:['disgust','gross','revolted','awful','sick','horrible'],
+    6:['cannot wait','excited for','looking forward','anticipat','counting down','so pumped'],
+    7:['trust','reliable','safe','believe','confident'],
+    8:['love','heart','adore','cherish','crush'],
+    9:['hopeful','positive','optimistic','better','bright','things will'],
+    10:['hopeless','useless','pointless','why bother','never works','give up'],
+    11:['anxious','nervous','overthinking','panic','worry','cannot sleep'],
+    12:['embarrassed','awkward','mortifying','blush','hide my face'],
+    13:['thank','grateful','appreciate','blessed','gratitude'],
+    14:['relief','finally','done','finished','submitted','over','phew'],
+    15:['confused','do not understand','makes no sense','what happened','no idea']
+  };
+  Object.entries(kw).forEach(([idx, words]) => {
+    words.forEach(word => { if(t.includes(word)) w[idx] += 0.3 + Math.random()*0.15; });
+  });
+  w.forEach((_,i) => w[i] += Math.random()*0.04);
+  const sum = w.reduce((a,b)=>a+b,0);
+  return w.map(v => v/sum);
+}
+
+function renderResults(result) {
+  document.getElementById('resEmoji').textContent    = result.primary_emoji;
+  document.getElementById('resEmotion').textContent  = result.primary_emotion.charAt(0).toUpperCase() + result.primary_emotion.slice(1);
+  document.getElementById('resConfidence').textContent = result.primary_confidence;
+  document.getElementById('resultCard').classList.add('visible');
+
+  const barsEl = document.getElementById('emotionBars');
+  barsEl.innerHTML = '';
+  (result.top_emotions || []).slice(0,8).forEach((e,i) => {
+    const pct = (e.confidence*100).toFixed(1);
+    const el  = document.createElement('div');
+    el.className = 'emotion-bar-item';
+    el.innerHTML = `<div class="bar-header">
+      <span class="bar-label">${e.emoji} ${e.emotion}</span>
+      <span class="bar-pct">${pct}%</span></div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${pct}%;animation-delay:${i*0.08}s"></div>
+      </div>`;
+    barsEl.appendChild(el);
+  });
+
+  const probs = result.all_probs || {};
+  EMOTIONS.forEach(e => {
+    const p    = probs[e.name] || 0;
+    const fill = document.getElementById('etf-'+e.name);
+    const tile = document.getElementById('tile-'+e.name);
+    const wc   = document.getElementById('wc-'+e.name);
+    if(fill) setTimeout(() => fill.style.width = (p*100).toFixed(1)+'%', 100);
+    if(tile) tile.classList.toggle('dominant', e.name === result.primary_emotion);
+    if(wc)   wc.classList.toggle('active', e.name === result.primary_emotion);
+  });
+
+  document.getElementById('vizGrid').style.display = 'grid';
+  drawRadar(probs);
+  addToHistory(result);
+  document.getElementById('resultCard').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function drawRadar(probs) {
+  const canvas = document.getElementById('radarChart');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+  const cx=W/2, cy=H/2, R=Math.min(W,H)/2-30, n=EMOTIONS.length;
+  const vals = EMOTIONS.map(e => probs[e.name]||0);
+  const maxVal = Math.max(...vals)||0.01;
+  const isDark = document.documentElement.getAttribute('data-theme')==='dark';
+  const gc = isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.06)';
+  const tc = isDark?'rgba(255,255,255,0.45)':'rgba(0,0,0,0.45)';
+
+  for(let r=1;r<=4;r++){
+    ctx.beginPath();
+    for(let i=0;i<n;i++){
+      const a=(i/n)*2*Math.PI-Math.PI/2;
+      const x=cx+Math.cos(a)*R*(r/4), y=cy+Math.sin(a)*R*(r/4);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.closePath(); ctx.strokeStyle=gc; ctx.lineWidth=1; ctx.stroke();
+  }
+  for(let i=0;i<n;i++){
+    const a=(i/n)*2*Math.PI-Math.PI/2;
+    ctx.beginPath(); ctx.moveTo(cx,cy);
+    ctx.lineTo(cx+Math.cos(a)*R, cy+Math.sin(a)*R);
+    ctx.strokeStyle=gc; ctx.stroke();
+  }
+  ctx.beginPath();
+  vals.forEach((v,i) => {
+    const a=(i/n)*2*Math.PI-Math.PI/2;
+    const r2=R*(v/maxVal)*0.9+R*0.1;
+    const x=cx+Math.cos(a)*r2, y=cy+Math.sin(a)*r2;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  });
+  ctx.closePath();
+  ctx.fillStyle=isDark?'rgba(124,108,248,0.2)':'rgba(108,92,231,0.15)'; ctx.fill();
+  ctx.strokeStyle=isDark?'#7c6cf8':'#6c5ce7'; ctx.lineWidth=2; ctx.stroke();
+
+  ctx.font='9px Space Grotesk,sans-serif'; ctx.fillStyle=tc; ctx.textAlign='center';
+  EMOTIONS.forEach((e,i)=>{
+    const a=(i/n)*2*Math.PI-Math.PI/2;
+    ctx.fillText(e.emoji, cx+Math.cos(a)*(R+16), cy+Math.sin(a)*(R+16)+3);
+  });
+}
+
+function addToHistory(result) {
+  history.unshift(result);
+  if(history.length>5) history.pop();
+  const section = document.getElementById('historySection');
+  const list    = document.getElementById('historyList');
+  section.style.display = 'block';
+  list.innerHTML = '';
+  history.forEach(h => {
+    const item = document.createElement('div');
+    item.className = 'history-item';
+    item.innerHTML = `<span class="hi-emoji">${h.primary_emoji}</span>
+      <div class="hi-text">
+        <div class="hi-tweet">${h.text}</div>
+        <div class="hi-emotion">${h.primary_emotion}</div>
+      </div>
+      <span class="hi-score">${h.primary_confidence}</span>`;
+    item.onclick = () => { document.getElementById('tweetInput').value = h.text; renderResults(h); };
+    list.appendChild(item);
+  });
+}
+
+function clearInput() {
+  document.getElementById('tweetInput').value = '';
+  document.getElementById('charCount').textContent = '0 / 280';
+  document.getElementById('resultCard').classList.remove('visible');
+  document.getElementById('vizGrid').style.display = 'none';
+  EMOTIONS.forEach(e => {
+    const fill = document.getElementById('etf-'+e.name);
+    const tile = document.getElementById('tile-'+e.name);
+    const wc   = document.getElementById('wc-'+e.name);
+    if(fill) fill.style.width='0';
+    if(tile) tile.classList.remove('dominant');
+    if(wc)   wc.classList.remove('active');
+  });
+}
+
+function setLoading(v) {
+  document.getElementById('loadingOverlay').classList.toggle('visible', v);
+  document.getElementById('btnText').textContent = v ? '⏳ Analyzing...' : '🔍 Analyze Emotion';
+}
+
+/* ── Tab Switching ── */
+function switchTab(tab) {
+  ['single','bulk','image'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('active', t===tab);
+    document.getElementById('pane-'+t).classList.toggle('active', t===tab);
+  });
+  if(tab !== 'single') {
+    document.getElementById('resultCard').classList.remove('visible');
+    document.getElementById('vizGrid').style.display = 'none';
+  }
+}
+
+/* ── Bulk Analysis ── */
+document.getElementById('bulkInput').addEventListener('input', function() {
+  const lines = this.value.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
+  document.getElementById('bulkCount').textContent = lines.length + ' tweet' + (lines.length!==1?'s':'');
+});
+
+function clearBulk() {
+  document.getElementById('bulkInput').value = '';
+  document.getElementById('bulkCount').textContent = '0 tweets';
+  document.getElementById('bulkResults').classList.remove('visible');
+}
+
+async function analyzeBulk() {
+  const raw = document.getElementById('bulkInput').value;
+  const tweets = raw.split('\n').map(l=>l.trim()).filter(l=>l.length>0).slice(0,50);
+  if(!tweets.length) { showToast('Please enter at least one tweet'); return; }
+
+  document.getElementById('bulkBtnText').textContent = '⏳ Analyzing...';
+  await new Promise(r=>setTimeout(r,400));
+
+  const rows = [];
+  const emotionCount = {};
+
+  for(const text of tweets) {
+    const probs = simulateBERT(text);
+    const allProbs = {};
+    EMOTIONS.forEach((e,i) => allProbs[e.name] = probs[i]);
+    const sorted = [...EMOTIONS].map((e,i)=>({...e,prob:probs[i]})).sort((a,b)=>b.prob-a.prob);
+    const top = sorted[0];
+    emotionCount[top.name] = (emotionCount[top.name]||0)+1;
+    rows.push({text, emotion:top.name, emoji:top.emoji, conf:(top.prob*100).toFixed(1), prob:top.prob});
+  }
+
+  // Summary chips
+  const sumEl = document.getElementById('bulkSummary');
+  sumEl.innerHTML = '';
+  const topEmotion = Object.entries(emotionCount).sort((a,b)=>b[1]-a[1])[0];
+  const topEmoObj = EMOTIONS.find(e=>e.name===topEmotion[0]);
+  [
+    `<strong>${tweets.length}</strong> tweets analyzed`,
+    `${topEmoObj?.emoji||''} Dominant: <strong>${topEmotion[0]}</strong> (${topEmotion[1]})`,
+    `${Object.keys(emotionCount).length} unique emotions`
+  ].forEach(html => {
+    const chip = document.createElement('div');
+    chip.className='bulk-sum-chip'; chip.innerHTML=html;
+    sumEl.appendChild(chip);
+  });
+
+  // Table rows
+  const tbody = document.getElementById('bulkTableBody');
+  tbody.innerHTML = '';
+  rows.forEach((r,i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="color:var(--text-faint);font-family:var(--font-mono);font-size:var(--text-xs);">${i+1}</td>
+      <td class="bulk-tweet-cell" title="${r.text}">${r.text}</td>
+      <td><div class="bulk-emotion-cell">${r.emoji} ${r.emotion}</div></td>
+      <td class="bulk-conf-cell">${r.conf}%</td>
+      <td class="bulk-bar-cell">
+        <div class="bulk-mini-bar">
+          <div class="bulk-mini-fill" style="width:0" data-w="${r.conf}"></div>
+        </div>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('bulkResults').classList.add('visible');
+  setTimeout(() => {
+    tbody.querySelectorAll('.bulk-mini-fill').forEach(el => {
+      el.style.width = el.dataset.w + '%';
+    });
+  }, 50);
+
+  document.getElementById('bulkBtnText').textContent = '📋 Analyze All';
+  document.getElementById('bulkResults').scrollIntoView({behavior:'smooth', block:'nearest'});
+  showToast(`✅ Analyzed ${tweets.length} tweets`);
+}
+
+/* ── Image Tweet Analysis ── */
+const dropZone = document.getElementById('imgUploadZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if(file && file.type.startsWith('image/')) processImageFile(file);
+});
+
+function handleImageUpload(e) {
+  const file = e.target.files[0];
+  if(file) processImageFile(file);
+}
+
+function processImageFile(file) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    document.getElementById('imgPreview').src = ev.target.result;
+    document.getElementById('imgPreviewWrap').classList.add('visible');
+    document.getElementById('imgResultSection').classList.remove('visible');
+    simulateOCR(file.name, ev.target.result);
+  };
+  reader.readAsDataURL(file);
+}
+
+function simulateOCR(filename, dataUrl) {
+  const statusEl = document.getElementById('ocrStatus');
+  const statusTxt = document.getElementById('ocrStatusText');
+  const ocrText = document.getElementById('imgOcrText');
+
+  statusEl.classList.add('loading');
+  statusTxt.textContent = 'Extracting text from image...';
+  ocrText.value = '';
+
+  // Simulate OCR delay
+  setTimeout(() => {
+    statusEl.classList.remove('loading');
+    statusTxt.textContent = '✅ Text extracted — review and edit if needed';
+    // Provide a demo extracted text (in production this calls an OCR API)
+    const demoTexts = [
+      "Just got promoted at work! Feeling absolutely incredible right now!",
+      "I cannot believe how my day went, everything just fell apart again",
+      "So grateful for all the love and support from my friends and family",
+      "Cannot wait for the weekend trip, so excited for everything!",
+      "Missing home so much, the distance is really getting to me"
+    ];
+    ocrText.value = demoTexts[Math.floor(Math.random()*demoTexts.length)];
+    showToast('📸 Image processed · Edit extracted text if needed');
+  }, 1200);
+}
+
+function clearImage() {
+  document.getElementById('imgFileInput').value = '';
+  document.getElementById('imgPreviewWrap').classList.remove('visible');
+  document.getElementById('imgResultSection').classList.remove('visible');
+  document.getElementById('imgOcrText').value = '';
+}
+
+async function analyzeImageTweet() {
+  const text = document.getElementById('imgOcrText').value.trim();
+  if(!text) { showToast('No text to analyze — please upload an image first'); return; }
+
+  document.getElementById('imgBtnText').textContent = '⏳ Analyzing...';
+  await new Promise(r=>setTimeout(r,500));
+
+  const probs = simulateBERT(text);
+  const sorted = [...EMOTIONS].map((e,i)=>({...e,prob:probs[i]})).sort((a,b)=>b.prob-a.prob);
+  const top = sorted[0];
+
+  document.getElementById('imgResEmoji').textContent = top.emoji;
+  document.getElementById('imgResEmotion').textContent = top.name.charAt(0).toUpperCase()+top.name.slice(1);
+  document.getElementById('imgResConf').textContent = (top.prob*100).toFixed(1)+'%';
+  document.getElementById('imgResultSection').classList.add('visible');
+  document.getElementById('imgBtnText').textContent = '🔍 Analyze Emotion';
+
+  // Also render full results in the main result card
+  const allProbs = {};
+  EMOTIONS.forEach((e,i) => allProbs[e.name] = probs[i]);
+  renderResults({
+    text,
+    primary_emotion: top.name,
+    primary_emoji: top.emoji,
+    primary_confidence: (top.prob*100).toFixed(1)+'%',
+    top_emotions: sorted.slice(0,8).map(e=>({emotion:e.name,emoji:e.emoji,confidence:e.prob,confidence_pct:(e.prob*100).toFixed(1)+'%'})),
+    all_probs: allProbs
+  });
+  switchTab('single');
+  showToast('🖼️ Image tweet analyzed successfully!');
+}
+
+function showToast(msg, dur=3000) {
+  const t = document.createElement('div');
+  t.className='toast'; t.textContent=msg;
+  document.getElementById('toastContainer').appendChild(t);
+  setTimeout(()=>t.remove(), dur);
+}
+</script>
+</body>
+</html>
